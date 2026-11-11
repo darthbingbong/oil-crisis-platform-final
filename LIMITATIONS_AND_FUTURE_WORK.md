@@ -122,8 +122,8 @@ The literal readings are impossible (Argentina or Chile alone would exceed the w
 
 - **Saved, not live.** Every real tanker is a snapshot taken on 2026-11-11 (the final refresh, `prewarm_ais.py final-snapshot`; the three saved tracks and two Nearby samples are from 2026-11-03); the key expires on 2026-11-13 and the app then makes no AIS call.
 - **Provider search returns no position or ship type**, so a provider hit that is not already in the watchlist cannot be shown on a map.
-- **Tracks:** three saved 7-day tracks only (TANKER G, TANKER D, TANKER F). No Malacca tanker has one: all four were stopped, so no load was spent on them.
-- **The "vessels near this vessel" lists are two saved 10 nm samples** around TANKER E (Huelva) and TANKER B (Malacca). Nothing here counts vessels at a chokepoint; ports and a scenario-exposure count were not built (DECISIONS D1, D2, D24).
+- **Tracks:** three saved 7-day tracks only (OIZMENDI, MUHUT SILVER, CAPE ANN). No Malacca tanker has one: all four were stopped, so no load was spent on them.
+- **The "vessels near this vessel" lists are two saved 10 nm samples** around FRONT ALTAIR (Huelva) and SINGAPORE ENERGY (Malacca). Nothing here counts vessels at a chokepoint; ports and a scenario-exposure count were not built (DECISIONS D1, D2, D24).
 - **On the globe at the default zoom the 8 Huelva tankers are one dot** (they sit within a few nautical miles); the search box or a zoom separates them.
 
 ## 13. Markets panel (M13): limits

@@ -2,13 +2,15 @@
 
 A terminal-style web app for exploring what a maritime oil disruption would do. Pick a route (a chokepoint such as Suez or Hormuz, or a pipeline) on a 3D globe, blockade it or force a detour, and see the **price impact**, the **barrels displaced**, the **electric vehicles** that would be needed to offset them, the **extra lithium** that implies, and indicative **economy and market effects**. Every number is traceable to a source, a formula or a labelled assumption.
 
-> **Public edition.** This is the public copy of the project. It contains **no ShipFinder data** (no real vessel positions, tracks or route-planning responses; whether a provider's data may be shown publicly is unconfirmed, `docs/DECISIONS.md` D10, D27, D29): vessels are **SIMULATED**, and the voyage lengths are the project's **earlier estimates** (great-circle sums over illustrative waypoints, divided by 14 knots), so the Suez worked example below uses 21.2 days. Passages that talk about the saved real tankers, the 19.5-day ShipFinder voyage, the author's demo script or the screenshots describe the author's private copy and are kept as the project's history; the files they mention are not in this repository. The hosted-mode switches are in [Hosted mode](#hosted-mode-m16). Deploy settings for the public site (Render backend, Cloudflare Pages frontend) are in [`DEPLOY.md`](DEPLOY.md).
->
-> **Version 2.0.** `v1.0` and `v2.0` are tagged; `v2.0` was tagged after the final AIS snapshot taken on 2026-11-11 (08:32 UTC), before the provider key expires on 2026-11-13. It is a student project for presenting to a professor: *credibility beats flash*. Nothing is labelled live that is not, simulated things are labelled simulated, and the places where the evidence is thin are written down (see [What is verified and what is not](#what-is-verified-and-what-is-not) and `LIMITATIONS_AND_FUTURE_WORK.md`).
+> **Public edition.** This is the public copy of the project, used with ShipFinder's permission for **non-commercial** use (`docs/DECISIONS.md` D38). It contains **no raw provider responses, request logs or keys**: the real tankers are a **saved snapshot of 2026-11-11** in `backend/data/ais_display/` (only the fields the interface shows), and the site makes no ShipFinder call. Chokepoint traffic is simulated. The author's demo script, the screenshots and the browser scripts that need the raw saved data are not in this repository; passages that mention them are kept as the project's history. Deploy settings: [`DEPLOY.md`](DEPLOY.md). The hosted-mode switches are in [Hosted mode](#hosted-mode-m16).
+
+**Version 2.0.** `v1.0` and `v2.0` are tagged; `v2.0` was tagged after the final AIS snapshot taken on 2026-11-11 (08:32 UTC), before the provider key expires on 2026-11-13. It is a student project for presenting to a professor: *credibility beats flash*. Nothing is labelled live that is not, simulated things are labelled simulated, and the places where the evidence is thin are written down (see [What is verified and what is not](#what-is-verified-and-what-is-not) and `LIMITATIONS_AND_FUTURE_WORK.md`).
 
 - Walkthrough for presenting: **`DEMO_SCRIPT.md`** (7 minutes, with the arithmetic and a demo-day fallback plan).
 - Known limits: **`LIMITATIONS_AND_FUTURE_WORK.md`**.
 - Build instructions it was written to: `MASTER_PROMPT.md`. Phase 1 modelling decisions: `backend/PHASE1_SUMMARY.md`.
+
+**Live site:** <https://oil-crisis-platform-final.pages.dev> (frontend on Cloudflare Pages, API on Render: <https://oil-crisis-api.onrender.com>). Deploy settings: [`DEPLOY.md`](DEPLOY.md). The first visit after a quiet period can take up to a minute while the free API host wakes up.
 
 ## Run it yourself
 
@@ -134,7 +136,7 @@ All optional. Set them in `backend/.env` (copy `backend/.env.example`). Never pu
 | `AIS_ENABLED` | `1` | `0` is the kill switch: no provider call is ever made |
 | `AIS_TODAY` | unset | **Testing only**: `YYYY-MM-DD` fakes today's date so the expired-key behaviour can be checked (for example `2026-11-13`) |
 | `HOSTED_MODE` | unset (local) | `1` = public deployment (see [Hosted mode](#hosted-mode-m16)): visitors are served from caches filled by one scheduled refresh, rate limits and friendly errors are on, developer endpoints are closed, CORS allows only `FRONTEND_ORIGIN` |
-| `HOSTED_ENABLE_<SOURCE>` | the safe side | One flag per source, read only in hosted mode. `EIA`, `GDELT`, `TRADINGVIEW`, `GEM`, `ANTHROPIC` default **on**; `SHIPFINDER`, `AISSTREAM`, `NEWSAPI`, `ALPHAVANTAGE`, `SHIPFINDER_DISTANCES` default **off** |
+| `HOSTED_ENABLE_<SOURCE>` | the safe side | One flag per source, read only in hosted mode. `EIA`, `GDELT`, `TRADINGVIEW`, `GEM`, `ANTHROPIC`, `SHIPFINDER_SNAPSHOT` (show the saved 2026-11-11 tankers, read-only) and `SHIPFINDER_DISTANCES` (route-planned voyage days) default **on**; `SHIPFINDER` (live calls), `AISSTREAM`, `NEWSAPI`, `ALPHAVANTAGE` default **off** |
 | `FRONTEND_ORIGIN` | none | The one web address allowed to call the API from a browser in hosted mode |
 | `PUBLIC_REPO_URL` | the project repository | The footer's repository link |
 | `REFRESH_INTERVAL_HOURS` | `24` | Hours between scheduled refreshes in hosted mode |
@@ -179,6 +181,7 @@ All optional. Set them in `backend/.env` (copy `backend/.env.example`). Never pu
 | GET | `/api/v1/vessels/{mmsi}/near` | new (M12) | The saved Vessels Nearby sample that contains the vessel, with its seed and time. Never a live Nearby call |
 | GET | `/api/v1/hosted` | new (M16) | Facts about the deployment for the footer and the vessel layer: hosted or local, which sources are on, their attributions, the disclaimer, the privacy note, the repository link. Never a key |
 | GET | `/api/v1/ping` | new (M17) | Keep-warm and health-check target: `{"ok": true}`. Calls nothing external, reads no file, returns no key |
+| GET | `/api/v1/news/headlines` | new (M17) | The public site's news feed: the newest cached GDELT route headlines (publisher, time, keyword tag, route) with when each cache was fetched. Reads the cache only; no price effect |
 | POST | `/api/v1/dev/news-feed`, `/api/v1/news/test-inject` | DEV-ONLY | Simulate a feed failure or an empty feed; inject a test headline |
 | GET | `/api/v1/news/stream`, `/api/v1/news/alerts`, `/api/v1/news/recent`, `/api/v1/news/price` (older pipeline) | unchanged | SSE alert stream, the alerts that moved the simulated price, the audit log of every classified article, the SIMULATED model-baseline price (never a quote) |
 | POST | `/api/v1/news/poll-now` | DEV-ONLY | Runs one poll cycle of the older NewsAPI pipeline (NewsAPI key needed; outside the plan's terms for public use) |
@@ -186,8 +189,6 @@ All optional. Set them in `backend/.env` (copy `backend/.env.example`). Never pu
 **Route-collision decision: Option A.** `/api/v1/routes/{id}` returns a superset of what `/api/v1/routes/{chokepoint}` returned before. `backend/tests/test_routes_api.py` checks it against snapshots of the original responses (`backend/tests/snapshots/*_before.json`), key by key, for all four chokepoints and several URL spellings. Option B (`/route-data/{id}`) was not needed: no new field clashes with an old key.
 
 ## Data sources
-
-> **Licence scope.** The [MIT licence](LICENSE) covers the source code only. The files under `backend/data/` and the figures taken from third parties keep the licences and terms of their sources, listed in the table below. The GEM-derived values are used under a citation while GEM's licence is unconfirmed (`docs/DECISIONS.md` D30).
 
 Every data record in `routes.json` carries `source`, `source_url`, `data_year` and `is_estimate`. The distinct sources:
 
@@ -203,7 +204,7 @@ Every data record in `routes.json` carries `source`, `source_url`, `data_year` a
 | ICCT, *EV supply chain* report (Feb 2024) | 0.10 kg lithium per kWh for NMC-811 cathodes | 2024 | <https://theicct.org/wp-content/uploads/2024/02/ID-85-%E2%80%93-EV-supply-chain-Report-Letter-70112-v3.pdf> |
 | IEA, *Global EV Outlook 2026* | EV sales above 20 million and about 22 million produced in 2025; average battery sizes (China below 60 kWh, EU close to 70, US 90) | 2025 | <https://www.iea.org/reports/global-ev-outlook-2026> |
 | IMF Managing Director K. Georgieva, speech of 9 Mar 2026; IMF Working Paper 17/196 | The only two macro coefficients with a verified primary source: +0.4 pp global inflation and -0.1 to -0.2% global output per +10% oil, if it lasts most of a year | 2026, 2017 | <https://www.imf.org/en/news/articles/2026/03/09/sp030926-coping-and-thriving-in-a-fluid-world> and <https://www.imf.org/en/publications/wp/issues/2017/09/05/oil-prices-and-inflation-dynamics-evidence-from-advanced-and-developing-economies-45180> |
-| ShipFinder Open Platform | **Not in this public edition.** In the author's private copy only: planned sea distances for the voyage days and 12 saved real tankers with their tracks. None of that data is in this repository (public display unconfirmed, DECISIONS D10, D27, D29) | 2026-11 | <https://docs.shipfinder.com> |
+| ShipFinder Open Platform (Starter plan key `AIS-vessel-tracker`, valid to 2026-11-13) | Planned sea distances for the voyage days (M10, stored in `routes.json`); the 12 saved real tankers, their positions, three saved 7-day tracks and two Vessels Nearby samples (M12), shown on the public site as a **read-only SNAPSHOT dated 2026-11-11** from `backend/data/ais_display/` (only the fields the interface shows). **ShipFinder allowed public display for a non-commercial project that does not sell the data** (DECISIONS D38); raw responses are kept out of git and no ShipFinder call is made by the hosted site. Chokepoint traffic is simulated | 2026-11 | <https://docs.shipfinder.com> |
 | Natural Earth 1:50m admin-0 countries (public domain) | The 2D map's country outlines (bundled, simplified at three zoom levels; no tile server) | 2026 | <https://www.naturalearthdata.com/> |
 | GDELT Project, DOC 2.0 API | Route headlines (headline, source, date, link only). Attribution link shown in the panel | live | <https://www.gdeltproject.org/> |
 | AISStream.io | Tanker positions (live mode, unverified) | live | <https://aisstream.io/documentation> |
@@ -236,19 +237,19 @@ All of it is in `backend/services/calc_engine.py` as pure functions, driven by `
 | # | Step | Formula | Suez 20-day detour |
 |---|---|---|---|
 | 1 | Route flow (EIA, 2023 baseline) | from `routes.json` | 8,800,000 bpd (8.8 Mb/d) |
-| 2 | Voyage length T | estimated sea distance Ras Tanura to Rotterdam (great-circle sum over illustrative waypoints, 7,126 nm) / 14 knots | 21.2 days |
-| 3 | Delivery factor with a fixed tanker fleet | `T / (T + detour)` | 19.5 / 39.5 = 0.5146 |
-| 4 | Barrels displaced per day | `flow x (1 - delivery factor)` (blockade: `max(0, flow x blocked share - bypass)`) | 4,271,845 bpd |
-| 5 | Supply loss | `displaced / 103.3 Mb/d` | 4.135% of world supply |
-| 6 | Price impact (the validated formula) | `supply loss / 0.15` | **+27.6%** (±13.09 pp) |
+| 2 | Voyage length T | planned sea distance Ras Tanura to Rotterdam (ShipFinder route planning, 6,540.2 nm, retrieved 2026-11-02) / 14 knots | 19.5 days |
+| 3 | Delivery factor with a fixed tanker fleet | `T / (T + detour)` | 19.5 / 39.5 = 0.4937 |
+| 4 | Barrels displaced per day | `flow x (1 - delivery factor)` (blockade: `max(0, flow x blocked share - bypass)`) | 4,455,696 bpd |
+| 5 | Supply loss | `displaced / 103.3 Mb/d` | 4.313% of world supply |
+| 6 | Price impact (the validated formula) | `supply loss / 0.15` | **+28.8%** (±13.09 pp) |
 | 7 | The 30-day outlook (M14: one value) | the step-6 value at day 30, drawn as one marker with its error bar; no path, no decay, and the length of the disruption does not change it | 1 point, day 30 = +28.8% |
-| 8 | EVs needed to offset the lost fuel | `displaced x 19.5 gal gasoline/bbl x 365 / 500 gal per vehicle-year x EV share` | 60,809,709 EVs |
+| 8 | EVs needed to offset the lost fuel | `displaced x 19.5 gal gasoline/bbl x 365 / 500 gal per vehicle-year x EV share` | 63,426,835 EVs |
 | 9 | Lithium per EV (sourced case) | `0.10 kg Li/kWh x 60 kWh x 5.323 (LCE per Li) / 1000` | 0.0319 t LCE (the project's own 0.008 is shown for comparison) |
-| 10 | Lithium required | `EVs x t LCE per EV` | 1,942,140 t LCE (2.03 to 3.04 Mt across 60/70/90 kWh packs) |
-| 11 | Supply cap and deficit | cap = `availability x 1,543,670 t LCE (2025 world production) x years`; deficit = `max(0, required - cap)` | 10% x 1,543,670 x 5 = 771,835 t; deficit **1,170,305 t** |
+| 10 | Lithium required | `EVs x t LCE per EV` | 2,025,726 t LCE (2.03 to 3.04 Mt across 60/70/90 kWh packs) |
+| 11 | Supply cap and deficit | cap = `availability x 1,543,670 t LCE (2025 world production) x years`; deficit = `max(0, required - cap)` | 10% x 1,543,670 x 5 = 771,835 t; deficit **1,253,891 t** |
 | 12 | Importer shortfall | displaced x each group's share of route flow (EIA group shares only) | not available for Suez (EIA gives no breakdown) |
-| 13 | Economy (indicative) | IMF coefficients x price move per 10% x min(duration, 365)/365 | +0.18 pp inflation, -0.09 to -0.05% output |
-| 14 | Tanker tonne-miles (derived) | `detour / T` | +94.3% |
+| 13 | Economy (indicative) | IMF coefficients x price move per 10% x min(duration, 365)/365 | +0.19 pp inflation, -0.09 to -0.05% output |
+| 14 | Tanker tonne-miles (derived) | `detour / T` | +102.6% |
 | 15 | One-time transit gap | `flow x detour days` | 176,000,000 barrels |
 
 ## Every assumption
@@ -260,7 +261,7 @@ Everything below is either borrowed, chosen, or estimated, and is flagged in the
 3. **The formula is linear** and validated only up to 8% supply loss (see Methodology).
 4. **There is no price path.** Since M14 the app shows one price horizon, 30 days, as a single value with its error bar (the earlier hold-then-decay path over 180 days, and a straight line that briefly replaced it, were removed because nothing validated them; DECISIONS D33, D34).
 5. **Tanker fleet is fixed** for a detour (worst case): delivery scales by `T/(T+detour)`. `fleet=0` on the Results page lets the fleet expand (zero displaced).
-6. **Voyage days** are an ESTIMATE in this public edition: a great-circle distance summed over illustrative waypoints, divided by 14 knots (the project's tanker speed, an assumption). The default Suez detour (12.7 days) is the Cape estimate minus the Suez estimate. The author's private copy uses ShipFinder planned distances instead (D29). The globe lines are illustrative.
+6. **Voyage days** are a planned sea distance from ShipFinder route planning (5 Port-to-Port calls, retrieved 2026-11-02, 2 Point-to-Point cross-checks within 0.6%) divided by 14 knots. The distance is sourced; the 14-knot speed is the project's assumption. The default Suez detour (14 days) is the Cape plan minus the Suez plan, 11,239.4 and 6,540.2 nm. The globe lines are still illustrative.
 7. **Baseline flows** are the last normal year (2023 for Suez, Bab el-Mandeb and the Cape, 2024 elsewhere). Real conditions in 2026 differ (Hormuz effectively closed); results are a what-if from a normal baseline.
 8. **Hormuz bypass capacity** changed between EIA estimates (4.7, 3.5, 2.6 Mb/d); the headline uses 4.7 and the Results page shows 2.6 as a labelled sensitivity.
 9. **Importer shares** are group-level (EIA publishes nothing finer for most routes) and some are derived by subtraction; reserve cover days are not available.
@@ -293,17 +294,17 @@ Everything below is either borrowed, chosen, or estimated, and is flagged in the
 ### Changed in M11 to M15 (what you can see)
 
 - **M11, 2D map** beside the globe, with shared URL state (see the feature note above).
-- **M12, real vessels:** twelve saved real tankers (two sample areas: Huelva and the Strait of Malacca) on both views with one shared vessel panel, search (saved watchlist while typing, the provider only on a button press), three saved past tracks (TANKER D is the headline), two saved "vessels near this vessel" samples, the AIS budget endpoint and the expired-key behaviour (DECISIONS D21 to D24). Real vessels are never counted as traffic, and chokepoint traffic stays `SIMULATED`.
+- **M12, real vessels:** twelve saved real tankers (two sample areas: Huelva and the Strait of Malacca) on both views with one shared vessel panel, search (saved watchlist while typing, the provider only on a button press), three saved past tracks (MUHUT SILVER is the headline), two saved "vessels near this vessel" samples, the AIS budget endpoint and the expired-key behaviour (DECISIONS D21 to D24). Real vessels are never counted as traffic, and chokepoint traffic stays `SIMULATED`.
 - **M13, Markets panel** replaces the historical-events chart (removed from the dashboard): Indices, Commodities, FX; WTI and Brent are our own EIA cards with the WTI 30-day scenario toggle; the rest is TradingView's free widget with the chip "Via TradingView widget, delay set by TradingView" (DECISIONS D26).
 - **M14, 30-day outlook:** one price horizon. The headline was and is `supply loss / 0.15`; the hold-then-decay path over 180 days was removed, then the straight line that replaced it, leaving a single day-30 value with its error bar. `half_life_days` is gone from the report API; `horizon_days`, `validation_badge` and `price_horizon_days` were added. The barrels series now ends with the disruption length entered. `docs/outlook_validation.md`, `docs/m14_before_after.md`, DECISIONS D33 and D34.
 - **M15, polish:** map drag 6.5 to about 30 to 45 fps; nothing under 11 px; both lint warnings fixed (lint is clean); larger tap targets; a compact phone layout (taller map, compact ticker, folded snapshot note); documentation and tests brought up to the final state.
 
 ### Changed in M10 (numbers that moved)
 
-- **Voyage days (private copy only): real planned sea distances** (ShipFinder route planning, retrieved 2026-11-02) replaced great-circle sums over hand-placed waypoints: Suez and Bab el-Mandeb 21.2 to 19.5 days, Hormuz and Malacca 17.2 to 17.5, Turkish Straits 5.1 to 5.0, Danish Straits 4.2 (unchanged), the Cape voyage 33.9 to 33.5, the default Suez detour 12.7 to 14.0 days. **This public edition keeps the earlier values** (before: `docs/m10_voyage_before.json`).
+- **Voyage days now come from real planned sea distances** (ShipFinder route planning, retrieved 2026-11-02) instead of great-circle sums over hand-placed waypoints. Suez and Bab el-Mandeb 21.2 to **19.5** days, Hormuz and Malacca 17.2 to **17.5**, Turkish Straits 5.1 to **5.0**, Danish Straits 4.2 (unchanged), the Cape voyage 33.9 to 33.5, and the **default Suez detour 12.7 to 14.0 days**. The old estimates stay in `routes.json` as `voyage_derivation.previous_hand_estimate`. Full table: `docs/m10_route_planning_before_after.md`.
 - **The Suez 20-day example changed**: price impact +27.6% to **+28.8%**, barrels displaced 4,271,845 to 4,455,696 bpd, EVs 60.8 M to 63.4 M, extra lithium 1.94 to 2.03 Mt LCE, deficit 1.17 to 1.25 Mt. Only the voyage length T changed (21.2 to 19.5 days, so the delivery factor moved from 0.5146 to 0.4937); the formula, flows and factors did not. DEMO_SCRIPT was regenerated from the API.
 - The provider-sourced voyage lengths are no longer flagged as estimates (`is_estimate: false` on the derivation). Malacca stays an estimate route because its bypass capacity is.
-- No raw provider response and no ShipFinder-derived number is in this repository; the voyage lengths are the earlier estimates.
+- Raw provider responses are kept only in git-ignored folders; the committed file `backend/data/ais_route_plans.json` holds derived values with source and retrieval date.
 
 ### Changed in M6 to M8 (behaviour you can see)
 
@@ -581,7 +582,7 @@ The full list, with what was observed, is in **`LIMITATIONS_AND_FUTURE_WORK.md`*
 Twelve **real** tankers from a saved ShipFinder snapshot (first found on 2026-11-03: eight near Huelva, Spain and four in the Strait of Malacca; all twelve positions refreshed one by one in the final snapshot on 2026-11-11 08:32 UTC, so they have since sailed on) are drawn in teal on the globe and on the 2D map, always labelled **SNAPSHOT** with their seen-at time. They are two samples of where tankers were first found, not coverage of any area; chokepoint traffic stays **SIMULATED**.
 
 - **One vessel panel on both views:** name, MMSI, IMO, flag, type, length, speed, course, destination, draught, AIS status, position, how the position was confirmed, the SNAPSHOT badge with its time, and "cargo type not confirmed by AIS". The selected vessel is in the address (`vessel=<MMSI>`), so switching Globe/Map, reloading or sharing the link keeps it.
-- **Saved past track:** drawn on the surface of the globe and on the map, labelled "past track, fetched at <time>", or "no saved track". TANKER D is the headline track (it sailed 846 nm in the week, 659 nm start to end); TANKER F is kept and labelled "stationary during this window".
+- **Saved past track:** drawn on the surface of the globe and on the map, labelled "past track, fetched at <time>", or "no saved track". MUHUT SILVER is the headline track (it sailed 846 nm in the week, 659 nm start to end); CAPE ANN is kept and labelled "stationary during this window".
 - **Vessels near this vessel (10 nm):** the saved Nearby sample only, labelled with its seed and time. No live Nearby call is ever made (that service is on hold).
 - **Search box:** typing searches the saved vessels; the provider is asked only when you press "Search the provider" (one search per press; "no match" for status 31; limits and breaker respected).
 - **The key expires on 2026-11-13.** From that date the app makes no AIS call and every view says "AIS key expired, showing data saved on <date>"; there is no error screen. To check this without waiting, start a backend with `AIS_TODAY=2026-11-13` (testing only). `GET /api/v1/health` carries "AIS key expires in N days".
@@ -597,7 +598,7 @@ Twelve **real** tankers from a saved ShipFinder snapshot (first found on 2026-11
 
 ## Hosted mode (M16)
 
-`HOSTED_MODE=1` turns the same code into a public deployment. Local mode (the default) is unchanged. Decisions: `docs/DECISIONS.md` D25 to D32 and D37.
+`HOSTED_MODE=1` turns the same code into a public deployment. Local mode (the default) is unchanged. Decisions: `docs/DECISIONS.md` D25 to D32 and D37 to D40.
 
 | Source | Hosted default | What visitors get |
 |---|---|---|
@@ -605,16 +606,19 @@ Twelve **real** tankers from a saved ShipFinder snapshot (first found on 2026-11
 | GDELT | **on** | Route headlines from the scheduled refresh (cache labelled with its age), with the GDELT citation |
 | TradingView | **on** | The Markets widgets, with the attribution and a note that the visitor's browser contacts TradingView |
 | Global Energy Monitor | **on** | Refinery and pipeline values with the exact citation and the note "licence unconfirmed" |
-| Anthropic (Claude) | **on, capped** | Each headline classified once and cached; a daily call cap, a monthly dollar cap, and a rule-based fallback |
-| ShipFinder | **off** | SIMULATED vessels only; the saved real tankers, tracks and samples stay on the author's machine |
+| Anthropic (Claude) | **on by default, OFF at launch** | When on: each headline classified once and cached; a daily call cap, a monthly dollar cap, and a rule-based fallback. The launch deployment sets `HOSTED_ENABLE_ANTHROPIC=0` and no key, so headlines are tagged by rules (how to switch it on: `DEPLOY.md`) |
+| ShipFinder snapshot | **on, read-only** | The 12 saved real tankers, 3 saved tracks and 2 "vessels within 10 nm" samples from 2026-11-11, every one badged SNAPSHOT with its seen-at time. Footer: "Real tanker positions: ShipFinder snapshot (2026-11-11, non-commercial use). Chokepoint traffic is simulated." From 2026-11-13 the banner reads "showing data saved on 2026-11-11" |
+| ShipFinder live calls | **off** | The hosted site makes no ShipFinder call; the key expires 2026-11-13 and is not set on the host |
 | AISStream | **off** | Not set up |
-| NewsAPI | **off** | The older pipeline is fed from GDELT headlines instead |
+| NewsAPI | **off** | The "News Alert Feed" panel lists the cached GDELT route headlines instead (publisher, time, rule-based tag, route, and when the cache was fetched); they move no price. `GET /api/v1/news/headlines` |
 | Alpha Vantage | **off** | Not used on the public site (its free terms say personal, non-commercial use) |
-| ShipFinder-derived voyage distances | **off** | The earlier estimated distances (great-circle sums over illustrative waypoints), labelled as estimates |
+| ShipFinder route-planned voyage distances | **on** | The same voyage days as the local copy (Suez 19.5 days, default detour 14.0). `HOSTED_ENABLE_SHIPFINDER_DISTANCES=0` switches back to the earlier estimates |
 
 What else changes when hosted: a visitor request never causes an EIA or GDELT call (one scheduled refresh a day and one at start-up do), a sliding one-minute rate limit per client (120 requests, 30 for the calculator) answers 429 with a plain sentence and `Retry-After`, the developer and test endpoints answer 404, CORS allows only `FRONTEND_ORIGIN`, an unexpected failure is one friendly sentence (never a traceback), and the footer shows the disclaimer, an attribution for every enabled source, the TradingView note, a privacy note (no cookies, no analytics) and the repository link.
 
-Because the voyage distances differ, the same scenario gives slightly different numbers on the public site than in the author's local copy (for the Suez detour, the default is 12.7 days on the estimated set against 14.0 on the ShipFinder-derived set). Evidence: `docs/m10_voyage_before.json` and `docs/m10_voyage_after.json`.
+The public site and the author's local copy now use the same voyage distances (ShipFinder route planning, DECISIONS D38), so the same scenario gives the same numbers in both. The earlier estimated set (Suez 21.2 days, default detour 12.7) stays in the code behind `HOSTED_ENABLE_SHIPFINDER_DISTANCES=0` and in `docs/m10_voyage_before.json`.
+
+**Permission and condition.** ShipFinder replied (2026-11-11) that public display of its data on a hosted site is allowed as long as the project is non-commercial and the data is not sold. This project is non-commercial and sells nothing; if that changes, switch the two ShipFinder flags off and remove `backend/data/ais_display/`.
 
 ## Tests
 
