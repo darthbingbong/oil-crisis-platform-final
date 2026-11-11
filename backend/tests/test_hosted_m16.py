@@ -374,3 +374,70 @@ def test_estimated_set_carries_no_provider_wording_except_the_one_disclosure():
     assert "ShipFinder" in meta_note and "not republished" in meta_note
     suez = next(r for r in doc["routes"] if r["id"] == "suez")
     assert "earlier estimates" in suez["default_detour_days_note"] and suez["default_detour_days"] == 12.7
+
+
+# ------------------------------------------------------------------------------------------------------------------------ deploy (M17)
+def test_ping_answers_with_no_external_call(host, monkeypatch):
+    from main import app
+    from services import price_feed, news_feed
+
+    def boom(*a, **k):
+        raise AssertionError("ping must not reach any feed")
+    monkeypatch.setattr(price_feed, "get_service", boom)
+    monkeypatch.setattr(news_feed, "get_route_news", boom)
+    r = TestClient(app).get("/api/v1/ping")
+    assert r.status_code == 200 and r.json() == {"ok": True}
+
+
+def test_startup_refresh_refills_an_empty_cache_after_a_fresh_deploy(host, monkeypatch, tmp_path):
+    """A fresh deploy has an empty disk. The start-up refresh (lifespan -> refresh_loop) must fill the price and news caches, then visitors are served from them."""
+    from services import news_feed as nf, price_feed as pf, refresh
+    from services.route_data import all_routes
+    from services.cache import TTLCache
+    monkeypatch.setenv("EIA_API_KEY", "k")
+    monkeypatch.setenv("REFRESH_INTERVAL_HOURS", "100")
+    cache = TTLCache(tmp_path, nf.HOSTED_CACHE_TTL_SECONDS)
+    monkeypatch.setattr(nf, "_cache", cache)
+    monkeypatch.setattr(nf, "WARMUP_GAP_SECONDS", 0)
+
+    class FakeEIA:
+        last_latency_ms = 1
+
+        async def fetch_recent(self, days):
+            return [{"date": "2026-11-03", "wti": 99.0, "brent": 107.0}, {"date": "2026-11-02", "wti": 98.0, "brent": 106.0}]
+
+    async def fake_gdelt(query):
+        return [{"title": "Tanker rerouted after attack near a strait", "url": "https://example.com/a", "seendate": "20261110T120000Z", "domain": "example.com", "language": "English"}]
+
+    svc = pf.PriceService(provider_factory=lambda key: FakeEIA())
+    monkeypatch.setattr(pf, "get_service", lambda: svc)
+    monkeypatch.setattr(refresh, "get_service", lambda: svc)
+    real = nf.get_route_news
+
+    async def with_fake(route, **kw):
+        return await real(route, cache=cache, fetch=fake_gdelt, **kw)
+    monkeypatch.setattr(nf, "get_route_news", with_fake)
+
+    async def no_classify(items):
+        return 0
+    monkeypatch.setattr(refresh, "classify_route_items", no_classify)
+    real_sleep = asyncio.sleep
+
+    async def quick_sleep(s):                                  # the 3 s start-up delay and the long interval become a single yield
+        await real_sleep(0)
+    monkeypatch.setattr(refresh.asyncio, "sleep", quick_sleep)
+
+    async def go():
+        before = await svc.live()
+        task = asyncio.create_task(refresh.refresh_loop())
+        for _ in range(500):
+            await real_sleep(0.001)
+            if (await svc.live())["status"] == "DAILY_CLOSE" and all(cache.get(f"news_{r['id']}") for r in all_routes()):
+                break
+        task.cancel()
+        return before, await svc.live()
+    before, after = asyncio.run(go())
+    assert before["status"] == "OFFLINE_FALLBACK" and before["fallback_reason"] == "cache_only"
+    assert after["status"] == "DAILY_CLOSE"
+    for route in all_routes():
+        assert cache.get(f"news_{route['id']}") is not None, route["id"]
