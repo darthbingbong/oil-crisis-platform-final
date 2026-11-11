@@ -186,6 +186,8 @@ All optional. Set them in `backend/.env` (copy `backend/.env.example`). Never pu
 
 ## Data sources
 
+> **Licence scope.** The [MIT licence](LICENSE) covers the source code only. The files under `backend/data/` and the figures taken from third parties keep the licences and terms of their sources, listed in the table below. The GEM-derived values are used under a citation while GEM's licence is unconfirmed (`docs/DECISIONS.md` D30).
+
 Every data record in `routes.json` carries `source`, `source_url`, `data_year` and `is_estimate`. The distinct sources:
 
 | Source | Used for | Year | URL |
